@@ -81,7 +81,8 @@ class LabelordWeb(flask.Flask):
 # TODO: instantiate LabelordWeb app
 # Be careful with configs, this is module-wide variable,
 # you want to be able to run CLI app as it was in task 1.
-app = ...
+from flask import Flask
+app = Flask(__name__)
 
 # TODO: implement web app
 # hint: you can use flask.current_app (inside app context)
@@ -90,7 +91,9 @@ app = ...
 def get():
    return 'bla bla'
    
-@app.route('/', methods=['POST'])   
+@app.route('/', methods=['POST'])
+def post():
+   return 'bla'   
 
 
 @cli.command()
