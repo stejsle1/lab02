@@ -320,7 +320,7 @@ def post():
 @click.option('-p', '--port', default='5000', help='Port')
 @click.option('-d', '--debug', is_flag=True, help='Debug mode')
 @click.pass_context
-def run_server(ctx, host, port, debug)
+def run_server(ctx, host, port, debug):
     # TODO: implement the command for starting web app (use app.run)
     # Don't forget to app the session from context to app
     app.run(debug=debug, host=host, port=int(port))
