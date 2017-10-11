@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+    <head>
+        <title>PYT lab02</title>
+    </head>
+    <body>           
+        <h1>PYT lab02</h1>
+        <p>Aplikace slouzi jako webove rozhrani pro aklikaci pro globalni spravu stitku, kterymi se na GitHubu oznacuji issues.
+        
+        {% if ok %}
+        <table>
+        {% for repo in repos%}
+        <tr><td> {{ repo }} </td><td> {{ repos[repo] }} </td></tr>
+        {% endfor %}
+        </table>
+        {% endif %}
+    </body>
+</html>
