@@ -97,7 +97,7 @@ def post():
 
 
 @cli.command()
-@click.option('-h', '--host', defaul='127.0.0.1', help='Host address')
+@click.option('-h', '--host', default='127.0.0.1', help='Host address')
 @click.option('-p', '--port', default='5000', help='Port')
 @click.option('-d', '--debug', is_flag=True, help='Debug mode')
 @click.pass_context
