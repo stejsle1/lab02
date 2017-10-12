@@ -77,7 +77,7 @@ def list_repos(ctx, config, token, tenv):
    session = requests.Session()
    session = setup(session, t)
 
-   repos = session.get('https://api.github.com/user/repos')
+   repos = session.get('https://api.github.com/user/repos?per_page=100&page=1')
    
    if 'message' in repos.json() and repos.json()['message'] == 'Bad credentials':
       print("Bad credentials.", file=sys.stderr)
