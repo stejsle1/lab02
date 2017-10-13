@@ -8,8 +8,8 @@
         <p>Aplikace slouzi jako webove rozhrani pro aklikaci pro globalni spravu stitku, kterymi se na GitHubu oznacuji issues.
         
         <table>
-        {% for repo in repos %}
-        <tr><td> {{ repo }} </td><td> {{ repos.repo }} </td></tr>
+        {% for repo, addr in repos.iteritems() %}
+        <tr><td> {{ repo }} </td><td> {{ addr }} </td></tr>
         {% endfor %}
         </table>
     </body>
