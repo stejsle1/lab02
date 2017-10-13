@@ -308,7 +308,8 @@ app = Flask(__name__)
 @app.route('/', methods=['GET'])
 def get():
    repos = {'prvni': 'aha', 'druhy': 'none'}
-   return render_template('get.html', **repos)
+   name = "Tuqi"
+   return render_template('get.html', repos=**repos, name=name)
    
 @app.route('/', methods=['POST'])
 def post():
