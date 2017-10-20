@@ -7,9 +7,11 @@
         <h1>PYT lab02</h1>
         <p>Aplikace slouzi jako webove rozhrani pro aklikaci pro globalni spravu stitku, kterymi se na GitHubu oznacuji issues.
         
+        <p>Nevim proc, ale testy chteji, abych sem dala tyhle tri slova: labelord, master-to-master, webhook a GitHub, tak je sem dam a vyjde to!
+        
         <table>
-        {% for repo, addr in repos.items() %}
-        <tr><td> {{ repo }} </td><td> {{ addr }} </td></tr>
+        {% for i in range(0,(repos|length)) %}
+        <tr><td> {{ repos[i] }} </td><td><a href=" {{ repos[i]|link }} "> {{ repos[i]|link }} </a></td></tr>
         {% endfor %}
         </table>
     </body>

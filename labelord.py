@@ -2,13 +2,19 @@
 # MI-PYT, task 1 (requests+click)
 # File: labelord.py
 # TODO: create requirements.txt and install
-import click
+
 import flask
-import os
+import getpass
 import requests
+import click
+import configparser
+import json
+import sys
+import os
+import hmac
+import hashlib
 
 def setup(session, token):
-   session = requests.Session()
    session.headers = {'User-Agent': 'Python'}
    def token_auth(req):
       req.headers['Authorization'] = 'token ' + token
@@ -32,132 +38,186 @@ def printextra(level, text, label, err):
          print('[' + label + '][ERR] ' + text)               
       if err == 2:
          print('[' + label + '][DRY] ' + text)
-   if level == 4:
-      if err == 2:
+   if level > 4:
+      if level == 6:
          print('[SUMMARY] ' + text) 
-      else:
+      if level == 5:
          print('SUMMARY: ' + text)         
 
 # Structure your implementation as you want (OOP, FP, ...)
 # Try to make it DRY also for your own good
 
 
-@click.group('labelord')
+@click.group('labelord')                
+@click.help_option('-h', '--help')
+@click.version_option(version='labelord, version 0.1')
+@click.option('-c', '--config', type=click.Path(exists=True), help='Config file')    
+@click.option('-t', '--token', help='Token')
 @click.pass_context
-def cli(ctx):
+def cli(ctx, config, token):
+   
+   conffile = configparser.ConfigParser()
+             
+   if config is not None:
+      conffile.read(config) 
+   else:
+      if os.path.isfile('./config.cfg') == True:
+         conffile.read('./config.cfg')
+         config = './config.cfg'
+           
+   
     # TODO: Add and process required app-wide options
     # You can/should use context 'ctx' for passing
     # data and objects to commands
 
     # Use this session for communication with GitHub
-    session = ctx.obj.get('session', requests.Session())
+   session = ctx.obj.get('session', requests.Session())
+   ctx.obj['session'] = session
+   ctx.obj['config'] = config
 
 
-@cli.command()
-@click.option('-c', '--config', default='./config.cfg', help='Config file')
+@cli.command()  
 @click.option('-t', '--token', help='Token')
 @click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.pass_context
-def list_repos(ctx, config, token, tenv):
+def list_repos(ctx, token, tenv):
+   """List repos."""
+   session = ctx.obj['session']
+   config = ctx.obj['config']
    conffile = configparser.ConfigParser()
-   conffile.read(config)
-
+   conffile.optionxform = str   
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config)
+   
    if not token:
       if not tenv:
-         if not 'github' in conffile:
-            print('No GitHub token has been provided.', file=sys.stderr)
+         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          if 'github' in conffile and not 'token' in conffile['github']:
-            print('No GitHub token has been provided.', file=sys.stderr)
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
       else: t = tenv
    else: t = token
-
-   session = requests.Session()
+   
    session = setup(session, t)
 
    repos = session.get('https://api.github.com/user/repos?per_page=100&page=1')
-   
+   a = 0
    if 'message' in repos.json() and repos.json()['message'] == 'Bad credentials':
-      print("Bad credentials.", file=sys.stderr)
-      sys.exit(5)
+      print("GitHub: ERROR " + str(repos.status_code) + ' - ' + repos.json()['message'], file=sys.stderr)
+      sys.exit(4)
 
    if repos.status_code != 200:
-      print("Error.", file-sys.stderr)
+      print("GitHub: ERROR " + str(repos.status_code) + ' - ' + repos.json()['message'], file=sys.stderr)
       sys.exit(10)
 
    for repo in repos.json():
       print(repo['full_name'])
+      a = a+1
+   
+   b = 1   
+   if a == 100:
+      while a == 100:  
+        a = 0
+        b = b+1
+        repos = session.get('https://api.github.com/user/repos?per_page=100&page=' + str(b)) 
+        for repo in repos.json():
+           print(repo['full_name']) 
+           a = a+1 
 
 
 @cli.command()
-@click.option('-c', '--config', default='./config.cfg', help='Config file')
+@click.argument('repository', required=1)
 @click.option('-t', '--token', help='Token')
 @click.option('--tenv', envvar='GITHUB_TOKEN')
-@click.argument('repository', required=1)
 @click.pass_context
-def list_labels(ctx, config, token, tenv, repository):
+def list_labels(ctx, repository, token, tenv):
+   """List labels."""
+   session = ctx.obj['session']
+   config = ctx.obj['config']
    conffile = configparser.ConfigParser()
-   conffile.read(config)
-
+   conffile.optionxform = str
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config) 
+   
    if not token:
       if not tenv:
-         if not 'github' in conffile:
-            print('No GitHub token has been provided.', file=sys.stderr)
+         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          if 'github' in conffile and not 'token' in conffile['github']:
-            print('No GitHub token has been provided.', file=sys.stderr)
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
       else: t = tenv
    else: t = token
-
-   session = requests.Session()
+   
    session = setup(session, t)
-
-   list = session.get('https://api.github.com/repos/' + repository + '/labels')
+   
+   a = 0
+   list = session.get('https://api.github.com/repos/' + repository + '/labels?per_page=100&page=1')
    if list.status_code == 404:
-      print(list.json()['message'], file=sys.stderr)
+      print("GitHub: ERROR " + str(list.status_code) + ' - ' + list.json()['message'], file=sys.stderr)
       sys.exit(5)
-
+  
+   if 'message' in list.json() and list.json()['message'] == 'Bad credentials':
+      print("GitHub: ERROR " + str(list.status_code) + ' - ' + list.json()['message'], file=sys.stderr)
+      sys.exit(4)
+        
    if list.status_code != 200:
-      print("Error.", file=sys.stderr)
-      print(list.status_code)
+      print("GitHub: ERROR " + str(list.status_code) + ' - ' + list.json()['message'], file=sys.stderr)
       sys.exit(10)
-
+      
    for label in list.json():
-      print(u'\u0023' + label['color'].upper() + ' ' + label['name'])
+      print(u'\u0023' + label['color'] + ' ' + label['name'])
+      a = a+1 
+        
+   b = 1 
+     
+   if a == 100:
+      while a == 100: 
+        a = 0
+        b = b+1
+        list = session.get('https://api.github.com/repos/' + repository + '/labels?per_page=100&page=' + str(b))
+     
+        for label in list.json():
+           print(u'\u0023' + label['color'] + ' ' + label['name'])
+           a = a+1
+          
 
-@cli.command()
+@cli.command()                      
 @click.argument('mode', type=click.Choice(['update', 'replace']))
-@click.option('-c', '--config', default='./config.cfg', help='Config file')
-@click.option('-t', '--token', help='Token')
-@click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.option('-r', '--template-repo', help="Add a template repo.")
 @click.option('-a', '--all-repos', is_flag=True, help='All available repos.')
 @click.option('-d', '--dry-run', is_flag=True, help='Dry run')
 @click.option('-v', '--verbose', is_flag=True, help='Verbose mode')
 @click.option('-q', '--quiet', is_flag=True, help='Quiet mode')
+@click.option('-t', '--token', help='Token')
+@click.option('--tenv', envvar='GITHUB_TOKEN')
 @click.pass_context
-def run(ctx, mode, config, token, tenv, template_repo, all_repos, dry_run, verbose, quiet):
+def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, tenv):
+   
+   config = ctx.obj['config']
    conffile = configparser.ConfigParser()
    conffile.optionxform = str
-   conffile.read(config)
+   if config is not None and os.path.isfile(config) == True:
+      conffile.read(config)
+   session = ctx.obj['session']
    
    if not token:
       if not tenv:
-         if not 'github' in conffile:
-            print('No GitHub token has been provided.', file=sys.stderr)
+         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          if 'github' in conffile and not 'token' in conffile['github']:
-            print('No GitHub token has been provided.', file=sys.stderr)
+            print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
       else: t = tenv
-   else: t = token
-
-   session = requests.Session()
+   else: t = token  
+   
    session = setup(session, t)
    
    repos = []
@@ -167,28 +227,30 @@ def run(ctx, mode, config, token, tenv, template_repo, all_repos, dry_run, verbo
    # vyber, kde menit labely
    if not all_repos:
       if not 'repos' in conffile:
-         print('No repositories specification has been found.', file=sys.stderr)
+         print('No repositories specification has been found', file=sys.stderr)
          sys.exit(7)
       else: 
          for repo in conffile['repos']:
             if conffile.getboolean('repos', repo):
                repos.append(repo)
    else: 
-      reposlist = session.get('https://api.github.com/user/repos')
+      reposlist = session.get('https://api.github.com/user/repos?per_page=100&page=1')
       if 'message' in reposlist.json() and reposlist.json()['message'] == 'Bad credentials':
-         print("Bad credentials.", file=sys.stderr)
-         sys.exit(5)
+         print("GitHub: ERROR " + str(reposlist.status_code) + ' - ' + reposlist.json()['message'], file=sys.stderr)
+         sys.exit(4)
 
       if reposlist.status_code != 200:
-         print("Error.", file-sys.stderr)
+         print("GitHub: ERROR " + str(reposlist.status_code) + ' - ' + reposlist.json()['message'], file=sys.stderr)
          sys.exit(10)
 
       for repo in reposlist.json():
          repos.append(repo['full_name'])
    
+   c = 0
    labels = {}
    ok = 0
    level = 1
+   error_code = 0
    if verbose: level = 2
    if quiet: level = 0
    if verbose and quiet: level = 1
@@ -199,69 +261,74 @@ def run(ctx, mode, config, token, tenv, template_repo, all_repos, dry_run, verbo
    if not template_repo:
       if not 'others' in conffile:
          if not 'labels' in conffile:
-            print('No labels specification has been found.', file=sys.stderr)
+            print('No labels specification has been found', file=sys.stderr)
             sys.exit(6)
          else: 
             # update labels z configu
             for label in conffile['labels']:
-               labels[label] = conffile['labels'][label]
+               labels[label] = conffile['labels'][label]      
       else: 
          # update template repo z configu
-         list = session.get('https://api.github.com/repos/' + conffile['others']['template-repo'] + '/labels')
+         list = session.get('https://api.github.com/repos/' + conffile['others']['template-repo'] + '/labels?per_page=100&page=1')
          if list.status_code == 404: 
-            printextra(level, conffile['others']['template-repo'] + '; ' + list.status_code + ' - ' + list.message, 'LBL', 1)
+            printextra(level, conffile['others']['template-repo'] + '; ' + str(list.status_code) + ' - ' + list.json()['message'], 'LBL', 1)
             errors = errors + 1
          for label in list.json():
             labels[label['name']] = label['color']
    else: 
       # update --template-repo z prepinace
-      list = session.get('https://api.github.com/repos/' + template-repo + '/labels')
+      list = session.get('https://api.github.com/repos/' + template_repo + '/labels?per_page=100&page=1')
       if list.status_code == 404: 
-         printextra(level, template-repo + '; ' + list.status_code + ' - ' + list.message, 'LBL', 1)
+         printextra(level, template_repo + '; ' + str(list.status_code) + ' - ' + list.json()['message'], 'LBL', 1)
          errors = errors + 1
       for label in list.json():
          labels[label['name']] = label['color']
    
    for repo in repos:
       sum = sum + 1
-      list = session.get('https://api.github.com/repos/' + repo + '/labels')
+      list = session.get('https://api.github.com/repos/' + repo + '/labels?per_page=100&page=1') 
       if list.status_code != 200:
-         printextra(level, repo + '; ' + list.status_code + ' - ' + list.message, 'LBL', 1)
-      for label in list.json(): 
-         if 'label' in labels:
-            if labels[label['name']] != label['color']: 
-               colors = json.dumps({"name": label['name'], "color": labels[label['name']].lower()})
-               if not dry_run: req = session.patch('https://api.github.com/repos/' + repo + '/labels/' + label['name'], data=colors)
+         printextra(level, repo + '; ' + str(list.status_code) + ' - ' + list.json()['message'], 'LBL', 1)
+         error_code = 10
+         errors = errors + 1
+         continue
+      for label in list.json():
+         if label['name'] in labels:
+            if labels[label['name']] != label['color']:
+               colors = json.dumps({"name": label['name'], "color": labels[label['name']]})
+               if not dry_run: req = session.patch('https://api.github.com/repos/' + repo + '/labels/' + label['name'].lower(), data=colors) 
                if dry_run or req.status_code == 200:
-                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']] + '; ' + label['name'] + '; ' + labels[label['name']], 'UPD', err)
+                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']], 'UPD', err)
                else:
-                  printextra(level, repo + '; ' + req.status_code + ' - ' + req.message, 'UPD', 1)
+                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'UPD', 1)
                   errors = errors + 1
-         else:
+         elif mode == 'replace':
             if not dry_run: req = session.delete('https://api.github.com/repos/' + repo + '/labels/' + label['name'])
             if dry_run or req.status_code == 204:
-               printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']], 'DEL', err)
+               printextra(level, repo + '; ' + label['name'] + '; ' + label['color'], 'DEL', err)
             else:
-               printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']] + '; ' + req.status_code + ' - ' + req.message, 'DEL', 1)
+               printextra(level, repo + '; ' + label['name'] + '; ' + label['color'] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'DEL', 1)
                errors = errors + 1
       for label in labels:
          for label2 in list.json():
-            if label == label2: ok = 1
-         if ok != 1:
-            colors = json.dumps({"name": label, "color": labels[label].lower()})
-            if not dry_run: req = session.post('https://api.github.com/repos/' + repo + '/labels', data=colors)
+            if label == label2['name']: ok = 1
+         if ok != 1: 
+            colors = json.dumps({"name": label, "color": labels[label]})
+            if not dry_run: req = session.post('https://api.github.com/repos/' + repo + '/labels', data=colors) 
             if dry_run or req.status_code == 201:
                printextra(level, repo + '; ' + label + '; ' + labels[label], 'ADD', err)
             else:
-               printextra(level, repo + '; ' + label + '; ' + labels[label] + '; ' + req.status_code + ' - ' + req.message, 'ADD', 1)
+               printextra(level, repo + '; ' + label + '; ' + labels[label] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'ADD', 1)
                errors = errors + 1
+               error_code = 10
                        
          ok = 0
    if errors != 0:      
-      printextra(4, str(errors) + ' error(s) in total, please check log above', '', level)      
+      printextra(4+level, str(errors) + ' error(s) in total, please check log above', '', err)      
    else:
-      printextra(4, str(sum) + ' repo(s) updated successfully', '', level)    
-    
+      printextra(4+level, str(sum) + ' repo(s) updated successfully', '', err)    
+   
+   sys.exit(error_code)          
 
 #####################################################################
 # STARING NEW FLASK SKELETON (Task 2 - flask)
@@ -269,8 +336,8 @@ def run(ctx, mode, config, token, tenv, template_repo, all_repos, dry_run, verbo
 
 class LabelordWeb(flask.Flask):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+   def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
         # You can do something here, but you don't have to...
         # Adding more args before *args is also possible
         # You need to pass import_name to super as first arg or
@@ -279,42 +346,101 @@ class LabelordWeb(flask.Flask):
         # @see http://flask.pocoo.org/docs/0.12/api/
         # @see https://github.com/pallets/flask
 
-    def inject_session(self, session):
+   def inject_session(self, session):
         # TODO: inject session for communication with GitHub
         # The tests will call this method to pass the testing session.
         # Always use session from this call (it will be called before
         # any HTTP request). If this method is not called, create new
         # session.
-        ...
+        self.session = session
 
-    def reload_config(self):
+   def reload_config(self):
         # TODO: check envvar LABELORD_CONFIG and reload the config
         # Because there are problems with reimporting the app with
         # different configuration, this method will be called in
         # order to reload configuration file. Check if everything
         # is correctly set-up
-        ...
+        
+        conffile = configparser.ConfigParser()
+        
+        if 'LABELORD_CONFIG' in os.environ:
+           config = os.environ['LABELORD_CONFIG']
+           conffile.read(config) 
+        else:
+           if os.path.isfile('./config.cfg') == True:
+              conffile.read('./config.cfg')
+              config = './config.cfg'
+        
+        if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+           print('No GitHub token has been provided', file=sys.stderr)
+           sys.exit(3)
+        if 'github' in conffile and not 'token' in conffile['github']:
+           print('No GitHub token has been provided', file=sys.stderr)
+           sys.exit(3)
+        else: self.token = conffile['github']['token']
+        
+        if 'github' in conffile and not 'webhook_secret' in conffile['github']:
+           print('No webhook secret has been provided', file=sys.stderr)
+           sys.exit(8)
+        else: self.secret = conffile['github']['webhook_secret']
+        
+        self.repos = []
+        if not 'repos' in conffile:
+           print('No repositories specification has been found', file=sys.stderr)
+           sys.exit(7)      
+        for repo in conffile['repos']:
+           if conffile.getboolean('repos', repo):
+              self.repos.append(repo)  
+        
+        self.labels = {}
+        if 'labels' in conffile:
+           for label in conffile['labels']:
+              self.labels[label] = conffile['labels'][label]           
 
 
 # TODO: instantiate LabelordWeb app
 # Be careful with configs, this is module-wide variable,
 # you want to be able to run CLI app as it was in task 1.
-from flask import Flask, render_template
-app = Flask(__name__)
+from flask import Flask, current_app, render_template, request, Response
+app = LabelordWeb(__name__)
 
 # TODO: implement web app
 # hint: you can use flask.current_app (inside app context)
 
+@app.template_filter('link')
+def convert_time(text):
+    """Convert the repo name to link"""
+    return 'https://github.com/' + text
+
 @app.route('/', methods=['GET'])
 def get():
-   repos = {'prvni': 'aha', 'druhy': 'none'}
-   name = "Tuqi"
-   return render_template('get.html', repos=repos, name=name)
+   return render_template('get.html', repos=current_app.repos)
    
 @app.route('/', methods=['POST'])
 def post():
-   return 'bla'   
-
+   if request.headers['Content-Type'] != 'application/json':
+      resp = Response(js, status=200, mimetype='application/json')
+      return resp
+   
+   data = {'hello': 'world', 'number': 3}
+   js = json.dumps(data)
+        
+   signature = 'sha1=' + hmac.new(bytes(current_app.secret, encoding="UTF-8"), request.data, hashlib.sha1).hexdigest()
+   if signature != request.headers['X-Hub-Signature']:
+      resp = Response(js, status=401, mimetype='application/json')
+      return resp
+      
+   if request.headers['X-GitHub-Event'] != 'ping' and request.headers['X-GitHub-Event'] != 'label':
+      resp = Response(js, status=200, mimetype='application/json')
+      return resp   
+   
+   if request.headers['X-GitHub-Event'] == 'ping'
+      resp = Response(js, status=200, mimetype='application/json')
+      return resp       
+   else 
+      resp = Response(js, status=200, content_type='application/json', mimetype='application/json')
+      resp.headers['Link'] = 'https://api.github.com/'
+      return resp
 
 @cli.command()
 @click.option('-h', '--host', default='127.0.0.1', help='Host address')
@@ -322,8 +448,10 @@ def post():
 @click.option('-d', '--debug', is_flag=True, help='Debug mode')
 @click.pass_context
 def run_server(ctx, host, port, debug):
+    """Run a server with Flask app"""
     # TODO: implement the command for starting web app (use app.run)
     # Don't forget to app the session from context to app
+    #app.reload_config()
     app.run(debug=debug, host=host, port=int(port))
 
 
