@@ -496,7 +496,7 @@ def run_server(ctx, host, port, debug):
     """Run a server with Flask app"""
     # TODO: implement the command for starting web app (use app.run)
     # Don't forget to app the session from context to app
-    #app.reload_config()
+    app.reload_config()
     config = ctx.obj['config']
     if config is not None and os.path.isfile(config) == True:
       os.environ['LABELORD_CONFIG'] = config
