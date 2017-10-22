@@ -398,7 +398,10 @@ class LabelordWeb(flask.Flask):
         self.labels = {}
         if 'labels' in conffile:
            for label in conffile['labels']:
-              self.labels[label] = conffile['labels'][label]           
+              self.labels[label] = conffile['labels'][label]
+              
+        self.ename = ''
+        self.dname = ''                 
 
 
 # TODO: instantiate LabelordWeb app
@@ -457,11 +460,13 @@ def post():
       
       elif data['action'] == 'deleted':
          if not data['repository']['full_name'] in current_app.repos: 
-            resp = Response(js, status=200, mimetype='application/json')
+            resp = Response(js, status=400, mimetype='application/json')
             return resp 
          for repo in current_app.repos:
-            if repo != data['repository']['full_name']:
+            if repo != data['repository']['full_name'] and current_app.dname != data['label']['name']:
                list = current_app.session.delete('https://api.github.com/repos/' + repo + '/labels/' + data['label']['name'])
+         # TODO
+         current_app.dname = data['label']['name']
       
       elif data['action'] == 'edited':  
          if not data['repository']['full_name'] in current_app.repos: 
@@ -469,15 +474,17 @@ def post():
             return resp 
          for repo in current_app.repos:
             if not 'name' in data['changes'] or not 'from' in data['changes']['name']:
-               colorname = data['label']['name']
+               colorname = data['label']['name']    
             else: colorname = data['changes']['name']['from']   
-            if repo != data['repository']['full_name']:
+            if repo != data['repository']['full_name'] and current_app.ename != data['label']['name']:
                colors = json.dumps({"name": data['label']['name'], "color": data['label']['color']})
                list = current_app.session.patch('https://api.github.com/repos/' + repo + '/labels/' + colorname, data=colors)
+         # TODO
+         current_app.ename = data['label']['name']
          
       resp = Response(js, status=200, content_type='application/json', mimetype='application/json')
       resp.headers['Link'] = 'https://api.github.com/'
-         
+       
       return resp
 
 @cli.command()
@@ -494,7 +501,7 @@ def run_server(ctx, host, port, debug):
     if config is not None and os.path.isfile(config) == True:
       os.environ['LABELORD_CONFIG'] = config
       app.reload_config()
-      
+     
     #current_app.session = ctx.obj['session']
     app.run(debug=debug, host=host, port=int(port))
 
