@@ -362,6 +362,7 @@ class LabelordWeb(flask.Flask):
         # is correctly set-up
         
         conffile = configparser.ConfigParser()
+        conffile.optionxform = str
         
         if 'LABELORD_CONFIG' in os.environ:
            config = os.environ['LABELORD_CONFIG']
@@ -378,6 +379,8 @@ class LabelordWeb(flask.Flask):
            print('No GitHub token has been provided', file=sys.stderr)
            sys.exit(3)
         else: self.token = conffile['github']['token']
+        
+        self.session = setup(self.session, self.token)
         
         if 'github' in conffile and not 'webhook_secret' in conffile['github']:
            print('No webhook secret has been provided', file=sys.stderr)
@@ -401,7 +404,7 @@ class LabelordWeb(flask.Flask):
 # TODO: instantiate LabelordWeb app
 # Be careful with configs, this is module-wide variable,
 # you want to be able to run CLI app as it was in task 1.
-from flask import Flask, current_app, render_template, request, Response
+from flask import Flask, current_app, render_template, request, Response, json
 app = LabelordWeb(__name__)
 
 # TODO: implement web app
@@ -418,15 +421,17 @@ def get():
    
 @app.route('/', methods=['POST'])
 def post():
+   data = json.loads(request.data)
+   
+   datas = {'hello': 'world', 'number': 3}
+   js = json.dumps(datas)
+   
    if request.headers['Content-Type'] != 'application/json':
       resp = Response(js, status=200, mimetype='application/json')
       return resp
-   
-   data = {'hello': 'world', 'number': 3}
-   js = json.dumps(data)
         
    signature = 'sha1=' + hmac.new(bytes(current_app.secret, encoding="UTF-8"), request.data, hashlib.sha1).hexdigest()
-   if signature != request.headers['X-Hub-Signature']:
+   if not 'X-Hub-Signature' in request.headers or signature != request.headers['X-Hub-Signature']:
       resp = Response(js, status=401, mimetype='application/json')
       return resp
       
@@ -434,24 +439,63 @@ def post():
       resp = Response(js, status=200, mimetype='application/json')
       return resp   
    
-   if request.headers['X-GitHub-Event'] == 'ping'
+   
+   
+   if request.headers['X-GitHub-Event'] == 'ping':
       resp = Response(js, status=200, mimetype='application/json')
       return resp       
-   else 
+   
+   else:
+      if data['action'] == 'created':
+         if not data['repository']['full_name'] in current_app.repos: 
+            resp = Response(js, status=400, mimetype='application/json')
+            return resp 
+         for repo in current_app.repos: 
+            if repo != data['repository']['full_name']:
+               colors = json.dumps({"name": data['label']['name'], "color": data['label']['color']})
+               list = current_app.session.post('https://api.github.com/repos/' + repo + '/labels', data=colors)
+      
+      elif data['action'] == 'deleted':
+         if not data['repository']['full_name'] in current_app.repos: 
+            resp = Response(js, status=200, mimetype='application/json')
+            return resp 
+         for repo in current_app.repos:
+            if repo != data['repository']['full_name']:
+               list = current_app.session.delete('https://api.github.com/repos/' + repo + '/labels/' + data['label']['name'])
+      
+      elif data['action'] == 'edited':  
+         if not data['repository']['full_name'] in current_app.repos: 
+            resp = Response(js, status=400, mimetype='application/json')
+            return resp 
+         for repo in current_app.repos:
+            if not 'name' in data['changes'] or not 'from' in data['changes']['name']:
+               colorname = data['label']['name']
+            else: colorname = data['changes']['name']['from']   
+            if repo != data['repository']['full_name']:
+               colors = json.dumps({"name": data['label']['name'], "color": data['label']['color']})
+               list = current_app.session.patch('https://api.github.com/repos/' + repo + '/labels/' + colorname, data=colors)
+         
       resp = Response(js, status=200, content_type='application/json', mimetype='application/json')
       resp.headers['Link'] = 'https://api.github.com/'
+         
       return resp
 
 @cli.command()
 @click.option('-h', '--host', default='127.0.0.1', help='Host address')
 @click.option('-p', '--port', default='5000', help='Port')
-@click.option('-d', '--debug', is_flag=True, help='Debug mode')
+@click.option('-d', '--debug', is_flag=True, envvar='FLASK_DEBUG', help='Debug mode')
 @click.pass_context
 def run_server(ctx, host, port, debug):
     """Run a server with Flask app"""
     # TODO: implement the command for starting web app (use app.run)
     # Don't forget to app the session from context to app
     #app.reload_config()
+    config = ctx.obj['config']
+    if config is not None and os.path.isfile(config) == True:
+      os.environ['LABELORD_CONFIG'] = config
+      app.reload_config()
+      
+    #current_app.session = ctx.obj['session']
     app.run(debug=debug, host=host, port=int(port))
 
 
