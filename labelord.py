@@ -91,10 +91,10 @@ def list_repos(ctx, token, tenv):
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -144,10 +144,10 @@ def list_labels(ctx, repository, token, tenv):
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -208,10 +208,10 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
    
    if not token:
       if not tenv:
-         if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+         if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
-         if 'github' in conffile and not 'token' in conffile['github']:
+         if 'github' in conffile and 'token' not in conffile['github']:
             print('No GitHub token has been provided', file=sys.stderr)
             sys.exit(3)
          else: t = conffile['github']['token']
@@ -266,7 +266,8 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          else: 
             # update labels z configu
             for label in conffile['labels']:
-               labels[label] = conffile['labels'][label]      
+               labels[label] = conffile['labels'][label]   
+            labels_lower = {k.lower():v for k,v in labels.items()}      
       else: 
          # update template repo z configu
          list = session.get('https://api.github.com/repos/' + conffile['others']['template-repo'] + '/labels?per_page=100&page=1')
@@ -275,6 +276,7 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
             errors = errors + 1
          for label in list.json():
             labels[label['name']] = label['color']
+         labels_lower = {k.lower():v for k,v in labels.items()}     
    else: 
       # update --template-repo z prepinace
       list = session.get('https://api.github.com/repos/' + template_repo + '/labels?per_page=100&page=1')
@@ -282,7 +284,8 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          printextra(level, template_repo + '; ' + str(list.status_code) + ' - ' + list.json()['message'], 'LBL', 1)
          errors = errors + 1
       for label in list.json():
-         labels[label['name']] = label['color']
+         labels[label['name']] = label['color'] 
+      labels_lower = {k.lower():v for k,v in labels.items()}  
    
    for repo in repos:
       sum = sum + 1
@@ -293,14 +296,17 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
          errors = errors + 1
          continue
       for label in list.json():
-         if label['name'] in labels:
-            if labels[label['name']] != label['color']:
-               colors = json.dumps({"name": label['name'], "color": labels[label['name']]})
+         if label['name'] in labels_lower:
+            for l in labels:
+               if l.lower() == label['name']:
+                  break
+            if labels_lower[label['name']] != label['color']:
+               colors = json.dumps({"name": l, "color": labels_lower[label['name']]})
                if not dry_run: req = session.patch('https://api.github.com/repos/' + repo + '/labels/' + label['name'].lower(), data=colors) 
                if dry_run or req.status_code == 200:
-                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']], 'UPD', err)
+                  printextra(level, repo + '; ' + l + '; ' + labels_lower[label['name']], 'UPD', err)
                else:
-                  printextra(level, repo + '; ' + label['name'] + '; ' + labels[label['name']] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'UPD', 1)
+                  printextra(level, repo + '; ' + l + '; ' + labels_lower[label['name']] + '; ' + str(req.status_code) + ' - ' + req.json()['message'], 'UPD', 1)
                   errors = errors + 1
          elif mode == 'replace':
             if not dry_run: req = session.delete('https://api.github.com/repos/' + repo + '/labels/' + label['name'])
@@ -311,7 +317,7 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
                errors = errors + 1
       for label in labels:
          for label2 in list.json():
-            if label == label2['name']: ok = 1
+            if label.lower() == label2['name']: ok = 1
          if ok != 1: 
             colors = json.dumps({"name": label, "color": labels[label]})
             if not dry_run: req = session.post('https://api.github.com/repos/' + repo + '/labels', data=colors) 
@@ -328,7 +334,7 @@ def run(ctx, mode, template_repo, all_repos, dry_run, verbose, quiet, token, ten
    else:
       printextra(4+level, str(sum) + ' repo(s) updated successfully', '', err)    
    
-   sys.exit(error_code)          
+   sys.exit(error_code)         
 
 #####################################################################
 # STARING NEW FLASK SKELETON (Task 2 - flask)
@@ -372,17 +378,17 @@ class LabelordWeb(flask.Flask):
               conffile.read('./config.cfg')
               config = './config.cfg'
         
-        if os.path.isfile('./config.cfg') == False or not 'github' in conffile:
+        if os.path.isfile('./config.cfg') == False and 'github' not in conffile:
            print('No GitHub token has been provided', file=sys.stderr)
            sys.exit(3)
-        if 'github' in conffile and not 'token' in conffile['github']:
+        if 'github' in conffile and 'token' not in conffile['github']:
            print('No GitHub token has been provided', file=sys.stderr)
            sys.exit(3)
         else: self.token = conffile['github']['token']
         
         self.session = setup(self.session, self.token)
         
-        if 'github' in conffile and not 'webhook_secret' in conffile['github']:
+        if 'github' in conffile and 'webhook_secret' not in conffile['github']:
            print('No webhook secret has been provided', file=sys.stderr)
            sys.exit(8)
         else: self.secret = conffile['github']['webhook_secret']
@@ -420,10 +426,21 @@ def convert_time(text):
 
 @app.route('/', methods=['GET'])
 def get():
+   if not current_app.session:
+      session = requests.Session()
+      current_app.inject_session(session)
+   if not current_app.repos:
+      current_app.reload_config()   
    return render_template('get.html', repos=current_app.repos)
    
 @app.route('/', methods=['POST'])
 def post():
+   if not current_app.session:
+      session = requests.Session()
+      current_app.inject_session(session)
+   if not current_app.repos:
+      current_app.reload_config()
+      
    data = json.loads(request.data)
    
    datas = {'hello': 'world', 'number': 3}
@@ -450,7 +467,7 @@ def post():
    
    else:
       if data['action'] == 'created':
-         if not data['repository']['full_name'] in current_app.repos: 
+         if data['repository']['full_name'] not in current_app.repos: 
             resp = Response(js, status=400, mimetype='application/json')
             return resp 
          for repo in current_app.repos: 
@@ -459,7 +476,7 @@ def post():
                list = current_app.session.post('https://api.github.com/repos/' + repo + '/labels', data=colors)
       
       elif data['action'] == 'deleted':
-         if not data['repository']['full_name'] in current_app.repos: 
+         if data['repository']['full_name'] not in current_app.repos: 
             resp = Response(js, status=400, mimetype='application/json')
             return resp 
          for repo in current_app.repos:
@@ -469,11 +486,11 @@ def post():
          current_app.dname = data['label']['name']
       
       elif data['action'] == 'edited':  
-         if not data['repository']['full_name'] in current_app.repos: 
+         if data['repository']['full_name'] not in current_app.repos: 
             resp = Response(js, status=400, mimetype='application/json')
             return resp 
          for repo in current_app.repos:
-            if not 'name' in data['changes'] or not 'from' in data['changes']['name']:
+            if 'name' not in data['changes'] or 'from' not in data['changes']['name']:
                colorname = data['label']['name']    
             else: colorname = data['changes']['name']['from']   
             if repo != data['repository']['full_name'] and current_app.ename != data['label']['name']:
@@ -496,7 +513,6 @@ def run_server(ctx, host, port, debug):
     """Run a server with Flask app"""
     # TODO: implement the command for starting web app (use app.run)
     # Don't forget to app the session from context to app
-    app.reload_config()
     config = ctx.obj['config']
     if config is not None and os.path.isfile(config) == True:
       os.environ['LABELORD_CONFIG'] = config
